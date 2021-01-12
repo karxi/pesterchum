@@ -84,13 +84,26 @@
     * Ctrl+Shift+PGUP/PGDN moves tab
     * Option to disable Ctrl+Tab's jump to newest
     * Ctrl+Shift+V "Mass Paste" option (parse lines in sequence)?
-* Make mouseovers (refocusing) reset idle timer (disableable)
+    * Make context menu add normal menu if opened from textedit?
+* Make refocusing reset idle timer (disableable)
+    * E.g. alt-tabbing into Pesterchum resets the idle timer
 * Set up EVENT FILTERS in windows to redirect events to the right places
     * Make the context key (if used in the text area) append the menu options
         from the right-click menu
+* Make small Qt debugging module (e.g. for tree display of Qt obj hierarchy)
 * Make system messages use timestamps like everything else
 * Offer option for timestamps in memos
 * Make a status window/popup to contain logs of information like invites
+* Add combo boxes + lists, for things like memo invites
+    * Right-click user -> Invite -> Select from list
+* Make console ignore normal theme (for reliability)/add overrides
+* Allow quirk commenting+naming (+mouseover displays)
+    * Let users toggle between old/new displays.
+
+* Make 'dark' versions of themes, fixing bugs with older versions
+
+* **LONG** term: Make it possible to rt.click objects and apply CSS styling on
+    the spot? Mostly for skin-makers / to go with new system
 
 ### "Security"
 **Note: The idea of security on this platform is pretty much laughable. Most of
@@ -141,6 +154,13 @@ version of the client. There aren't really any other options.
     * Should enable extra features, including ctag compression.
     * Allow manual compression changes via memo right-click menu for
         'advanced' (per the setting) users
+
+* Allow specification of profile to open with via command line
+* Allow to quit on (command line) error or continue with defaults (cf. above)
+
+* Split logs on pester start/end, rather than window close? (Optional)
+
+* Pastebin support? (Requires API token....)
 
 ## Todo/Done
 **Everything in this section has already been completed.**
@@ -270,6 +290,8 @@ version of the client. There aren't really any other options.
 * Log folder/file names are not case-sensitive, so they break on non-Windows
     systems
 * Log viewer needs adjustments and sanity checking for log directories
+* Log system DOES NOT PROPERLY OUTPUT HTML!
+    * Unicode isn't indicated in the metadate, there are no body tags, etc.
 * Capitalized /me's don't render (should forcibly lowercase them)
 * 'pcd10' and similar users don't get proper abbreviations on part (ugh)
 

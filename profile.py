@@ -1,9 +1,9 @@
 import logging
-import os
+import os, os.path as osp
 from string import Template
 import json
 import re
-import codecs
+import codecs, copy
 import platform
 from datetime import *
 from time import strftime, time
@@ -52,7 +52,7 @@ class PesterLog(object):
             time = datetime.now().strftime("%Y-%m-%d.%H.%M")
             self.convos[handle] = {}
             for (format, t) in modes.iteritems():
-                if not os.path.exists("%s/%s/%s/%s" % (self.logpath, self.handle, handle, format)):
+                if not osp.exists("%s/%s/%s/%s" % (self.logpath, self.handle, handle, format)):
                     os.makedirs("%s/%s/%s/%s" % (self.logpath, self.handle, handle, format))
                 try:
                     fp = codecs.open("%s/%s/%s/%s/%s.%s.txt" % (self.logpath, self.handle, handle, format, handle, time), encoding='utf-8', mode='a')
@@ -82,116 +82,193 @@ class PesterLog(object):
                 f.close()
 
 class userConfig(object):
+    # karxi: All of these are set to indicate which bit they stand for.
+    # Using << shifts the bit over by the second number's places, so x << 0
+    # will return x.
+
+    # Use for bit flag log setting
+    LOG     = 1 << 0    # 1
+    STAMP   = 1 << 1    # 2
+    # Use for bit flag blink
+    PBLINK  = 1 << 0    # 1
+    MBLINK  = 1 << 1    # 2
+    # Use for bit flag notfications
+    SIGNIN  = 1 << 0    # 1
+    SIGNOUT = 1 << 1    # 2
+    NEWMSG  = 1 << 2    # 4
+    NEWCONVO= 1 << 3    # 8
+    INITIALS= 1 << 4    # 16
     def __init__(self, parent):
         self.parent = parent
-        # Use for bit flag log setting
-        self.LOG = 1
-        self.STAMP = 2
-        # Use for bit flag blink
-        self.PBLINK = 1
-        self.MBLINK = 2
-        # Use for bit flag notfications
-        self.SIGNIN   = 1
-        self.SIGNOUT  = 2
-        self.NEWMSG   = 4
-        self.NEWCONVO = 8
-        self.INITIALS  = 16
-        self.filename = _datadir+"pesterchum.js"
+        self.filename = osp.join(_datadir, "pesterchum.js")
         with open(self.filename) as fp:
+            # This is all in unicode...hm.
             self.config = json.load(fp)
-        if self.config.has_key("defaultprofile"):
+        if "defaultprofile" in self.config:
             self.userprofile = userProfile(self.config["defaultprofile"])
         else:
             self.userprofile = None
 
-        self.logpath = _datadir+"logs"
+        self.logpath = osp.join(_datadir, "logs")
 
-        if not os.path.exists(self.logpath):
+        if not osp.exists(self.logpath):
             os.makedirs(self.logpath)
-        try:
-            with open("%s/groups.js" % (self.logpath), 'r') as fp:
-                self.groups = json.load(fp)
-        except (IOError, ValueError):
+
+        # Make sure to create a user theme dir so that they know they can put
+        # things there.
+        # This works for normal Pesterchum, too, so it's probably good to have.
+        uthemepath = osp.join(_datadir, "themes")
+        if not osp.exists(uthemepath):
+            os.makedirs(uthemepath)
+
+        #~# NOTE: None of this is used yet. Later, this will change.
+        #~# TODO: Make this into a reusable function for themes and the like.
+        #~# Probably 'establish_file' or something.
+        #~grouppaths = (
+        #~    osp.join(_datadir, "groups.js"),
+        #~    osp.join(self.logpath, "groups.js")
+        #~    )
+        #~self.group_paths = []
+        #~lpath = grouppaths[-1]
+        #~for lp in grouppaths:
+        #~    if osp.exists(lp):
+        #~        self.group_paths.append(lp)
+        #~try:
+        #~    lpath = self.group_paths[0]
+        #~except IndexError:
+        #~    # No matches. Use Pesterchum's default.
+        #~    lpath = grouppaths[-1]
+        #~    self.group_paths.append(lpath)
+        lpath = osp.join(self.logpath, "groups.js")
+
+        # Breaks naming convention to fit Pesterchum's convention...ugh.
+        self.grouppath = lpath
+
+        # TODO: Reenable this...in a subclass, then remove this code.
+        #~for lp in self.group_paths:
+        for lp in (self.grouppath,):
+            try:
+                with open(lp, 'r') as fp:
+                    self.groups = json.load(fp)
+            except IOError:
+                # Try the next.
+                continue
+            except ValueError as err:
+                errmsg = ' '.join("Failed to parse {0!r}",
+                                  "({1.__class__.__name__}):",
+                                  "{1.message}")
+                logging.error(errmsg.format(lp, err))
+                continue
+            else:
+                # We successfully got our groups.
+                break
+        else:
+            # We're out of paths.
+            logging.warning("Couldn't find groups.js; making a new one.")
             self.groups = {}
-            with open("%s/groups.js" % (self.logpath), 'w') as fp:
+            with open(self.grouppath, 'w') as fp:
                 json.dump(self.groups, fp)
 
     def chums(self):
-        if not self.config.has_key('chums'):
-            self.set("chums", [])
-        return self.config.get('chums', [])
-    def setChums(self, newchums):
-        with open(self.filename) as fp:
-            # what if we have two clients open??
-            newconfig = json.load(fp)
-        oldchums = newconfig['chums']
-        # Time to merge these two! :OOO
-        for c in list(set(oldchums) - set(newchums)):
-            newchums.append(c)
+        return self.setdefault("chums", [])
+    def setChums(self, newchums, overwrite=False):
+        # If 'overwrite', we're ACTUALLY setting the whole list.
+        with open(self.filename, 'r') as fp:
+            # TODO: Account for the possibility that we won't be able to grab
+            # this to open it.
+            oldconfig = json.load(fp)
+        oldchums = oldconfig.get("chums", [])
+        # Naturally eliminate certain duplicates
+        newchums = set(newchums)
+        if not overwrite:
+            # Merge the two chumrolls.
+            newchumroll = set(oldchums) | newchums
+        else:
+            # *Set* the chumroll to the new one.
+            newchumroll = newchums
+        newchumroll = list(newchumroll)
+        # Keep it sorted - why not?
+        newchumroll.sort()
 
-        self.set("chums", newchums)
-    def hideOfflineChums(self):
-        return self.config.get('hideOfflineChums', False)
-    def defaultprofile(self):
+        self.set("chums", newchumroll)
+    def addChum(self, chum):
         try:
-            return self.config['defaultprofile']
-        except KeyError:
-            return None
+            # Handle PesterProfile args
+            handle = chum.handle
+        except AttributeError:
+            handle = chum
+        if handle not in self.chums():
+            self.setChums([handle], overwrite=False)
+    def removeChum(self, chum):
+        try:
+            # Handle PesterProfile args
+            handle = chum.handle
+        except AttributeError:
+            handle = chum
+        chums = self.chums()
+        oldchums = list(chums)
+        modified = False
+        while True:
+            try:
+                chums.remove(handle)
+            except ValueError:
+                # We've removed every occurrence.
+                break
+            else: modified = True
+        if modified:
+            # A change was made. Save.
+            self.set("chums", chums)
+
+    def hideOfflineChums(self):
+        return self.config.get("hideOfflineChums", False)
+    def defaultprofile(self):
+        return self.get("defaultprofile", None)
     def tabs(self):
-        return self.config.get("tabs", True)
+        return self.get("tabs", True)
     def tabMemos(self):
-        if not self.config.has_key('tabmemos'):
-            self.set("tabmemos", self.tabs())
-        return self.config.get("tabmemos", True)
+        return self.setdefault("tabmemos", self.tabs())
     def showTimeStamps(self):
-        if not self.config.has_key('showTimeStamps'):
-            self.set("showTimeStamps", True)
-        return self.config.get('showTimeStamps', True)
+        return self.setdefault("showTimeStamps", True)
     def time12Format(self):
-        if not self.config.has_key('time12Format'):
-            self.set("time12Format", True)
-        return self.config.get('time12Format', True)
+        return self.setdefault("time12Format", True)
     def showSeconds(self):
-        if not self.config.has_key('showSeconds'):
-            self.set("showSeconds", False)
-        return self.config.get('showSeconds', False)
+        return self.setdefault("showSeconds", False)
     def sortMethod(self):
-        return self.config.get('sortMethod', 0)
+        return self.get('sortMethod', 0)
     def useGroups(self):
-        return self.config.get('useGroups', False)
+        return self.get('useGroups', False)
+
     def openDefaultGroup(self):
         groups = self.getGroups()
         for g in groups:
             if g[0] == "Chums":
                 return g[1]
         return True
+
     def showEmptyGroups(self):
-        if not self.config.has_key('emptyGroups'):
-            self.set("emptyGroups", False)
-        return self.config.get('emptyGroups', False)
+        return self.setdefault("emptyGroups", False)
     def showOnlineNumbers(self):
-        if not self.config.has_key('onlineNumbers'):
-            self.set("onlineNumbers", False)
-        return self.config.get('onlineNumbers', False)
+        return self.setdefault("onlineNumbers", False)
     def logPesters(self):
-        return self.config.get('logPesters', self.LOG | self.STAMP)
+        return self.get('logPesters', self.LOG | self.STAMP)
     def logMemos(self):
-        return self.config.get('logMemos', self.LOG)
+        return self.get('logMemos', self.LOG)
     def disableUserLinks(self):
-        return not self.config.get('userLinks', True)
+        return not self.get('userLinks', True)
     def idleTime(self):
-        return self.config.get('idleTime', 10)
+        return self.get('idleTime', 10)
     def minimizeAction(self):
-        return self.config.get('miniAction', 0)
+        return self.get('miniAction', 0)
     def closeAction(self):
-        return self.config.get('closeAction', 1)
+        return self.get('closeAction', 1)
     def opvoiceMessages(self):
-        return self.config.get('opvMessages', True)
+        return self.get('opvMessages', True)
     def animations(self):
-        return self.config.get('animations', True)
+        return self.get('animations', True)
     def checkForUpdates(self):
-        u = self.config.get('checkUpdates', 0)
-        if type(u) == type(bool()):
+        # karxi: There's no way this is the best way to do this.
+        u = self.get('checkUpdates', 0)
+        if isinstance(u, bool):
             if u: u = 2
             else: u = 3
         return u
@@ -200,48 +277,46 @@ class userConfig(object):
         # Only on start
         # Never
     def lastUCheck(self):
-        return self.config.get('lastUCheck', 0)
+        return self.get('lastUCheck', 0)
     def checkMSPA(self):
-        return self.config.get('mspa', False)
+        return self.get('mspa', False)
     def blink(self):
-        return self.config.get('blink', self.PBLINK | self.MBLINK)
+        return self.get('blink', self.PBLINK | self.MBLINK)
     def notify(self):
-        return self.config.get('notify', True)
+        return self.get('notify', True)
     def notifyType(self):
-        return self.config.get('notifyType', "default")
+        return self.get('notifyType', "default")
     def notifyOptions(self):
-        return self.config.get('notifyOptions', self.SIGNIN | self.NEWMSG | self.NEWCONVO | self.INITIALS)
+        default = self.SIGNIN | self.NEWMSG | self.NEWCONVO | self.INITIALS
+        return self.get('notifyOptions', default)
     def lowBandwidth(self):
-        return self.config.get('lowBandwidth', False)
+        return self.get('lowBandwidth', False)
     def ghostchum(self):
-        return self.config.get('ghostchum', False)
-    def addChum(self, chum):
-        if chum.handle not in self.chums():
-            with open(self.filename) as fp:
-                # what if we have two clients open??
-                newconfig = json.load(fp)
-            newchums = newconfig['chums'] + [chum.handle]
-            self.set("chums", newchums)
-    def removeChum(self, chum):
-        if type(chum) is PesterProfile:
-            handle = chum.handle
-        else:
-            handle = chum
-        newchums = [c for c in self.config['chums'] if c != handle]
-        self.set("chums", newchums)
+        return self.get('ghostchum', False)
+
     def getBlocklist(self):
-        if not self.config.has_key('block'):
-            self.set('block', [])
-        return self.config['block']
+        return self.setdefault("block", [])
     def addBlocklist(self, handle):
         l = self.getBlocklist()
         if handle not in l:
             l.append(handle)
             self.set('block', l)
     def delBlocklist(self, handle):
-        l = self.getBlocklist()
-        l.pop(l.index(handle))
-        self.set('block', l)
+        blockl = self.getBlocklist()
+        oldblocks = list(blockl)
+        modified = False
+        while True:
+            try:
+                blockl.remove(handle)
+            except ValueError:
+                # We've removed every occurrence.
+                break
+            else:
+                modified = True
+        if modified:
+            # A change was made. Save.
+            self.set("block", blockl)
+
     def getGroups(self):
         if not self.groups.has_key('groups'):
             self.saveGroups([["Chums", True]])
@@ -279,50 +354,60 @@ class userConfig(object):
             jsonoutput = json.dumps(self.groups)
         except ValueError as e:
             raise e
-        with open("%s/groups.js" % (self.logpath), 'w') as fp:
+        with open(osp.join(self.logpath, "groups.js"), 'w') as fp:
             fp.write(jsonoutput)
 
     def server(self):
-        if hasattr(self.parent, 'serverOverride'):
+        try:
             return self.parent.serverOverride
-        return self.config.get('server', 'irc.mindfang.org')
+        except AttributeError:
+            return self.get("server", "irc.mindfang.org")
     def port(self):
-        if hasattr(self.parent, 'portOverride'):
+        try:
             return self.parent.portOverride
-        return self.config.get('port', '6667')
+        except AttributeError:
+            return self.get("port", "6667")
     def soundOn(self):
-        if not self.config.has_key('soundon'):
-            self.set('soundon', True)
-        return self.config['soundon']
+        return self.setdefault("soundon", True)
     def chatSound(self):
-        return self.config.get('chatSound', True)
+        return self.get('chatSound', True)
     def memoSound(self):
-        return self.config.get('memoSound', True)
+        return self.get('memoSound', True)
     def memoPing(self):
-        return self.config.get('pingSound', True)
+        return self.get('pingSound', True)
     def nameSound(self):
-        return self.config.get('nameSound', True)
+        return self.get('nameSound', True)
     def volume(self):
-        return self.config.get('volume', 100)
+        return self.get('volume', 100)
     def trayMessage(self):
-        return self.config.get('traymsg', True)
+        return self.get('traymsg', True)
+    def get(self, item, default=None):
+        return self.config.get(item, default)
     def set(self, item, setting):
         self.config[item] = setting
+        self.writeout()
+    def setdefault(self, item, default):
+        retval = self.config.setdefault(item, default)
+        self.writeout()
+        return retval
+    def writeout(self):
         try:
-            jsonoutput = json.dumps(self.config)
-        except ValueError as e:
-            raise e
+            jso = json.dumps(self.config)
+        except ValueError as err:
+            raise err
         with open(self.filename, 'w') as fp:
-            fp.write(jsonoutput)
+            fp.write(jso)
     def availableThemes(self):
         themes = []
+        uthemepath = osp.join(_datadir, "themes")
+        dthemepath = "themes"
         # Load user themes.
-        for dirname, dirnames, filenames in os.walk(_datadir+'themes'):
+        for dirname, dirnames, filenames in os.walk(uthemepath):
             for d in dirnames:
                 themes.append(d)
         # Also load embedded themes.
         if _datadir:
-            for dirname, dirnames, filenames in os.walk('themes'):
+            for dirname, dirnames, filenames in os.walk(dthemepath):
                 for d in dirnames:
                     if d not in themes:
                         themes.append(d)
@@ -330,31 +415,300 @@ class userConfig(object):
         return themes
     def availableProfiles(self):
         profs = []
-        profileloc = _datadir+'profiles'
+        profileloc = osp.join(_datadir, "profiles")
         for dirname, dirnames, filenames in os.walk(profileloc):
             for filename in filenames:
-                l = len(filename)
-                if filename[l-3:l] == ".js":
-                    profs.append(filename[0:l-3])
+                fn, ext = osp.splitext(filename)
+                if ext == ".js":
+                    profs.append(fn)
         profs.sort()
         return [userProfile(p) for p in profs]
+    # Just here to help Vim realize where to end the fold.
+    pass
 
+
+
+
+# These are all ugly and messy, but will be steadily phased out with time.
+def _sdict_dig(sdict, key, raw=True):
+    path = key.split('.')
+    if raw:
+        # Inject 'raw' access.
+        path.insert(1, "raw")
+    # Iterate down to the target.
+    targ = reduce(getattr, path, sdict)
+    # Do as we will.
+    return targ#~, optname
+# '_sdict_dig' is called in each generated function instead of once upon
+# creation, just in case their targets get swapped out....
+# TODO: Make it error instead of returning None for a failed find.
+def _gen_oldget(key, default=None):
+    if callable(default):
+        # If we have a callable object, we should use it to generate a
+        # value.
+        def get_wrapper(self, key=key, default=default):
+            obj = self
+            key = self._new_opt_paths.get(key, key)
+            default = default()
+            if '.' in key:
+                obj = _sdict_dig(self.sd_config, key)
+                # Query the Option object directly
+                return obj.get(default)
+            return obj.get(key, default)
+    else:
+        # We don't bother checking if this is mutable or not; it's safer just
+        # to copy() it anyway. Options shouldn't be touched except through
+        # their indicated interface....
+        def get_wrapper(self, key=key, default=default):
+            obj = self
+            key = self._new_opt_paths.get(key, key)
+            default = copy.copy(default)
+            if '.' in key:
+                obj = _sdict_dig(self.sd_config, key)
+                return obj.get(default)
+            return obj.get(key, default)
+    get_wrapper.key, get_wrapper.default = key, default
+    return get_wrapper
+def _gen_oldsget(key, default=None):
+    if callable(default):
+        def sget_wrapper(self, key=key, default=default):
+            # Options don't work this way! They come with defaults built in.
+            obj = self
+            key = self._new_opt_paths.get(key, key)
+            if '.' in key:
+                obj = _sdict_dig(self.sd_config, key)
+                # Defaults are already accounted for
+                val = obj.get()
+            else:
+                val = self.setdefault(key, default())
+                #~self.flush()
+            return val
+    else:
+        def sget_wrapper(self, key=key, default=default):
+            obj = self
+            key = self._new_opt_paths.get(key, key)
+            if '.' in key:
+                obj = _sdict_dig(self.sd_config, key)
+                val = obj.get()
+            else:
+                val = self.setdefault(key, copy.copy(default))
+                #~self.flush()
+            return val
+    sget_wrapper.key, sget_wrapper.default = key, default
+    return sget_wrapper
+def _gen_oldset(key):
+    def set_wrapper(self, val, key=key):
+        key = self._new_opt_paths.get(key, key)
+        if '.' in key:
+            obj = _sdict_dig(self.sd_config, key)
+            obj.set(val)
+            self.flush()
+        else:
+            self.set(key, val)
+            #~self.flush()
+    set_wrapper.key = key
+    return set_wrapper
+
+class configWrapper(userConfig):
+    import types
+
+    # Copied from userConfig - purely to keep them in the namespace, so we can
+    # use them.
+
+    # karxi: All of these are set to indicate which bit they stand for.
+    # Using << shifts the bit over by the second number's places, so x << 0
+    # will return x.
+
+    # Use for bit flag log setting
+    LOG     = 1 << 0    # 1
+    STAMP   = 1 << 1    # 2
+    # Use for bit flag blink
+    PBLINK  = 1 << 0    # 1
+    MBLINK  = 1 << 1    # 2
+    # Use for bit flag notfications
+    SIGNIN  = 1 << 0    # 1
+    SIGNOUT = 1 << 1    # 2
+    NEWMSG  = 1 << 2    # 4
+    NEWCONVO= 1 << 3    # 8
+    INITIALS= 1 << 4    # 16
+
+    parent = None
+    sd_config = None
+
+    # Note: Need to 'reduce()' those of these with periods in them.
+    # Period-separated names indicate a SettingsDict path. They're handled by
+    # the earlier-defined generator functions.
+    _new_opt_paths = dict(
+        #~chums               = "base.chumlist",
+        hideOfflineChums    = "base.hide_offline_chums",
+        # This does some voodoo we don't want to deal with.
+        defaultprofile      = "base.default_profile",
+        tabs                = "base.tabbed_pesters",
+        tabmemos            = "base.tabbed_memos",
+        showTimeStamps      = "base.show_timestamps",
+        time12Format        = "base.timestamp_12hr",
+        showSeconds         = "base.timestamp_seconds",
+        sortMethod          = "base.sort_method",
+        useGroups           = "base.enable_groups",
+        emptyGroups         = "base.show_empty_groups",
+        onlineNumbers       = "base.show_online_numbers",
+        logPesters          = "base.log_pesters",
+        logMemos            = "base.log_memos",
+        #~userLinks           = "",
+        idleTime            = "base.auto_idle_delay",
+        minimizeAction      = "base.minimize_action",
+        closeAction         = "base.close_action",
+        # Format changed for this one
+        #~opvMessages         = "base.show_user_modes",
+        animations          = "base.show_animations",
+        #~checkUpdates        = "",
+        #~lastUCheck          = "",
+        checkMSPA           = "base.check_mspa_updates",
+        blink               = "base.msg_blink_flags",
+        #~notify              = "base.notify",
+        #~notifyType          = "base.notify_type",
+        notifyOptions       = "base.notify_flags",
+        lowBandwidth        = "base.low_bandwidth_mode",
+        ghostchum           = "base.pesterdunk_ghostchum",
+        #~block               = "convo.blocked_users",
+        server              = "base.server",
+        port                = "base.port",
+        soundon             = "base.enable_sound",
+        # Not 100% sure these are appropriate names, needs checking
+        chatSound           = "base.beep_on_pester_msg",
+        memoSound           = "base.beep_on_memo_msg",
+        pingSound           = "base.beep_on_memo_ping",
+        nameSound           = "base.beep_on_mention",
+        volume              = "base.sound_volume",
+        trayMessage         = "base.tray_msg"
+    )
+
+    def __init__(self, parent, sdict):
+        # Let the old class set things up, for now.
+        super(configWrapper, self).__init__(parent)
+
+        # Overwrite a few things as we please.
+        self.parent = parent
+        # This hasn't been set up to work with a SettingsDict yet.
+        # Realistically, it'll probably just be easier to redirect the wrapper
+        # to access whatever global options directory we have set up.
+
+        # We rely on our 'config' already being set by userConfig.
+        # This has to contain all the other SettingsDicts.
+        self.sd_config = sdict
+
+        # Run through _new_opt_paths and set the old config variables to the
+        # sdict underlying this. (This is just a wrapper, but we can't ignore
+        # Pesterchum's default settings, and there's no other loader yet.)
+        for oldkey, newkey in self._new_opt_paths.items():
+            # Fetch the actual Option we'll reflect this value onto.
+            opt = self.sd_config.path_get(newkey, raw=True)
+            # Fetch the old function name.
+            val = getattr(self, oldkey)
+            # Call the old function, like Pesterchum would/will.
+            val = val()
+            # Set the loaded value to the sdict option accordingly.
+            opt.set(val)
+
+        # ???
+        return
+
+    def flush(self):
+        # Inherits from userConfig, for now
+        self.writeout()
+
+    # Use generators to standardize the access of old values.
+    # Later, we can update these to point to new places; eventually, after
+    # enough refactoring, this wrapper won't be necessary at all.
+    chums               = _gen_oldsget("chums", [])
+    # NEEDED: 'setChums'
+    # NEEDED: 'addChum'
+    # NEEDED: 'removeChum'
+    hideOfflineChums    = _gen_oldget("hideOfflineChums", False)
+    defaultprofile      = _gen_oldget("defaultprofile", None)
+    tabs                = _gen_oldget("tabs", True)
+    # karxi: TODO: Not sure this'll work properly. Test it.
+    tabmemos            = _gen_oldsget("tabmemos", tabs)
+    showTimeStamps      = _gen_oldsget("showTimeStamps", True)
+    time12Format        = _gen_oldsget("time12Format", True)
+    showSeconds         = _gen_oldsget("showSeconds", False)
+    sortMethod          = _gen_oldget("sortMethod", 0)
+    useGroups           = _gen_oldget("useGroups", False)
+    # NEEDED: 'openDefaultGroup'
+    showEmptyGroups     = _gen_oldsget("emptyGroups", False)
+    showOnlineNumbers   = _gen_oldsget("onlineNumbers", False)
+    logPesters          = _gen_oldget("logPesters", LOG | STAMP)
+    logMemos            = _gen_oldget("logMemos", LOG)
+    # NEEDED: 'disableUserLinks'
+    idleTime            = _gen_oldget("idleTime", 10)
+    minimizeAction      = _gen_oldget("miniAction", 0)
+    closeAction         = _gen_oldget("closeAction", 1)
+    opvoiceMessages     = _gen_oldget("opvMessages", True)
+    animations          = _gen_oldget("animations", True)
+    # NEEDED: 'checkForUpdates'
+    lastUCheck          = _gen_oldget("lastUCheck", 0)
+    checkMSPA           = _gen_oldget("mspa", False)
+    blink               = _gen_oldget("blink", PBLINK | MBLINK)
+    notify              = _gen_oldget("notify", True)
+    notifyType          = _gen_oldget("notifyType", "default")
+    notifyOptions       = _gen_oldget("notifyOptions",
+                                      SIGNIN | NEWMSG | NEWCONVO | INITIALS)
+    lowBandwidth        = _gen_oldget("lowBandwidth", False)
+    ghostchum           = _gen_oldget("ghostchum", False)
+    # NEEDED: 'addChum'
+    # NEEDED: 'removeChum'
+    getBlocklist        = _gen_oldsget("block", [])
+    # NEEDED: 'addBlocklist'
+    # NEEDED: 'delBlocklist'
+    # karxi: These two have overrides we need to respect.
+    # NEEDED: 'server'
+    # NEEDED: 'port'
+    soundOn             = _gen_oldsget("soundon", True)
+    chatSound           = _gen_oldget("chatSound", True)
+    memoSound           = _gen_oldget("memoSound", True)
+    memoPing            = _gen_oldget("pingSound", True)
+    nameSound           = _gen_oldget("nameSound", True)
+    volume              = _gen_oldget("volume", 100)
+    trayMessage         = _gen_oldget("traymsg", True)
+
+    # NEEDED: 'getGroups'
+    # NEEDED: 'addGroup'
+    # NEEDED: 'delGroup'
+    # NEEDED: 'expandGroup'
+    # NEEDED: 'saveGroups'
+
+    # TODO: Map 'set' so that it obeys the proper redirects...and modify
+    # 'config' for similar results.
+
+
+
+# What the fuck is this??? This whole class and everything that *uses* it needs
+# to be rewritten! It's terrible!
 class userProfile(object):
     def __init__(self, user):
-        self.profiledir = _datadir+"profiles"
+        self.profiledir = osp.join(_datadir, "profiles")
 
-        if type(user) is PesterProfile:
+        if isinstance(user, PesterProfile):
             self.chat = user
+            # THIS IS TERRIBLE PRACTICE.
+            # This code effectively sets up defaults, saves them, then
+            # haphazardly modifies them while setting up attributes based off
+            # of them, often using copy/pasted code.
+            # *WHY*??
             self.userprofile = {"handle":user.handle,
                                 "color": unicode(user.color.name()),
                                 "quirks": [],
                                 "theme": "pesterchum"}
+            # Convenience.
+            uprof = self.userprofile
             self.theme = pesterTheme("pesterchum")
             self.chat.mood = Mood(self.theme["main/defaultmood"])
             self.lastmood = self.chat.mood.value()
             self.quirks = pesterQuirks([])
             self.randoms = False
             initials = self.chat.initials()
+            # karxi: The fact that this check exists is terrifying.
+            # Our initials should *always* be 2 characters!
             if len(initials) >= 2:
                 initials = (initials, "%s%s" % (initials[0].lower(), initials[1]), "%s%s" % (initials[0], initials[1].lower()))
                 self.mentions = [r"\b(%s)\b" % ("|".join(initials))]
@@ -362,42 +716,39 @@ class userProfile(object):
                 self.mentions = []
             self.autojoins = []
         else:
-            with open("%s/%s.js" % (self.profiledir, user)) as fp:
-                self.userprofile = json.load(fp)
+            with open(osp.join(self.profiledir, user + ".js")) as fp:
+                self.userprofile = uprof = json.load(fp)
             try:
-                self.theme = pesterTheme(self.userprofile["theme"])
+                self.theme = pesterTheme(uprof["theme"])
             except ValueError:
                 self.theme = pesterTheme("pesterchum")
-            self.lastmood = self.userprofile.get('lastmood', self.theme["main/defaultmood"])
-            self.chat = PesterProfile(self.userprofile["handle"],
-                                      QtGui.QColor(self.userprofile["color"]),
+            self.lastmood = uprof.get('lastmood', self.theme["main/defaultmood"])
+            self.chat = PesterProfile(uprof["handle"],
+                                      QtGui.QColor(uprof["color"]),
                                       Mood(self.lastmood))
-            self.quirks = pesterQuirks(self.userprofile["quirks"])
-            if "randoms" not in self.userprofile:
-                self.userprofile["randoms"] = False
-            self.randoms = self.userprofile["randoms"]
-            if "mentions" not in self.userprofile:
+            self.quirks = pesterQuirks(uprof["quirks"])
+            self.randoms = uprof.setdefault("randoms", False)
+            if "mentions" not in uprof:
                 initials = self.chat.initials()
                 if len(initials) >= 2:
                     initials = (initials, "%s%s" % (initials[0].lower(), initials[1]), "%s%s" % (initials[0], initials[1].lower()))
-                    self.userprofile["mentions"] = [r"\b(%s)\b" % ("|".join(initials))]
+                    uprof["mentions"] = [r"\b(%s)\b" % ("|".join(initials))]
                 else:
-                    self.userprofile["mentions"] = []
-            self.mentions = self.userprofile["mentions"]
-            if "autojoins" not in self.userprofile:
-                self.userprofile["autojoins"] = []
-            self.autojoins = self.userprofile["autojoins"]
+                    uprof["mentions"] = []
+            self.mentions = uprof["mentions"]
+            self.autojoins = uprof.setdefault("autojoins", [])
 
         try:
-            with open(_datadir+"passwd.js") as fp:
+            with open(osp.join(_datadir, "passwd.js")) as fp:
                 self.passwd = json.load(fp)
-        except:
+        except (IOError, ValueError):
             self.passwd = {}
         self.autoidentify = False
         self.nickservpass = ""
-        if self.chat.handle in self.passwd:
-            self.autoidentify = self.passwd[self.chat.handle]["auto"]
-            self.nickservpass = self.passwd[self.chat.handle]["pw"]
+        chathl = self.chat.handle
+        if chathl in self.passwd:
+            self.autoidentify = self.passwd[chathl]["auto"]
+            self.nickservpass = self.passwd[chathl]["pw"]
 
     def setMood(self, mood):
         self.chat.mood = mood
@@ -481,11 +832,12 @@ class userProfile(object):
             jsonoutput = json.dumps(self.passwd, indent=4)
         except ValueError as e:
             raise e
-        with open(_datadir+"passwd.js", 'w') as fp:
+        with open(osp.join(_datadir, "passwd.js"), 'w') as fp:
             fp.write(jsonoutput)
     @staticmethod
     def newUserProfile(chatprofile):
-        if os.path.exists("%s/%s.js" % (_datadir+"profiles", chatprofile.handle)):
+        if osp.exists(osp.join(_datadir, "profiles",
+                               chatprofile.handle + ".js")):
             newprofile = userProfile(chatprofile.handle)
         else:
             newprofile = userProfile(chatprofile)
@@ -494,17 +846,17 @@ class userProfile(object):
 
 class PesterProfileDB(dict):
     def __init__(self):
-        self.logpath = _datadir+"logs"
+        self.logpath = osp.join(_datadir, "logs")
 
-        if not os.path.exists(self.logpath):
+        if not osp.exists(self.logpath):
             os.makedirs(self.logpath)
         try:
-            with open("%s/chums.js" % (self.logpath), 'r') as fp:
+            with open(osp.join(self.logpath, "chums.js"), 'r') as fp:
                 chumdict = json.load(fp)
         except (IOError, ValueError):
             # karxi: This code feels awfully familiar....
             chumdict = {}
-            with open("%s/chums.js" % (self.logpath), 'w') as fp:
+            with open(osp.join(self.logpath, "chums.js"), 'w') as fp:
                 json.dump(chumdict, fp)
 
         u = []
@@ -567,19 +919,21 @@ class PesterProfileDB(dict):
 
 class pesterTheme(dict):
     def __init__(self, name, default=False):
-        possiblepaths = (_datadir+"themes/%s" % (name),
-                         "themes/%s" % (name),
-                         _datadir+"themes/pesterchum",
-                         "themes/pesterchum")
-        self.path = "themes/pesterchum"
+        possiblepaths = (
+            osp.join(_datadir, "themes", name),
+            osp.join("themes", name),
+            osp.join(_datadir, "themes", "pesterchum"),
+            osp.join("themes", "pesterchum")
+        )
+        self.path = possiblepaths[-1]
         for p in possiblepaths:
-            if os.path.exists(p):
+            if osp.exists(p):
                 self.path = p
                 break
 
         self.name = name
         try:
-            with open(self.path+"/style.js") as fp:
+            with open(osp.join(self.path, "style.js")) as fp:
                 theme = json.load(fp, object_hook=self.pathHook)
         except IOError:
             theme = json.loads("{}")
@@ -616,7 +970,9 @@ class pesterTheme(dict):
                 s = Template(v)
                 d[k] = s.safe_substitute(path=self.path)
         return d
-    def get(self, key, default):
+    def get(self, key, default=None):
+        # Might want some errorchecking if 'None' is supplied.
+        logging.warning("pesterTheme.get called without a default")
         keys = key.split("/")
         try:
             v = super(pesterTheme, self).__getitem__(keys.pop(0))

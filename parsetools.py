@@ -2,6 +2,7 @@ import re
 import random
 import ostools
 import collections
+import logging
 from copy import copy
 from datetime import timedelta
 from PyQt4 import QtGui, QtCore
@@ -14,6 +15,8 @@ import dataobjs
 
 # karxi: My own contribution to this - a proper lexer.
 import pnc.lexercon as lexercon
+
+logger = logging.getLogger(__name__)
 
 # I'll clean up the things that are no longer needed once the transition is
 # actually finished.
@@ -392,7 +395,7 @@ def kxsplitMsg(lexed, fmt="pchum", maxlen=None, debug=False):
     while len(lexed) > 0:
         rounds += 1
         if debug:
-            print "[Starting round {}...]".format(rounds)
+            logger.debug("[Starting round {}...]".format(rounds))
         msg = lexed.popleft()
         msglen = 0
         is_text = False
@@ -433,9 +436,9 @@ def kxsplitMsg(lexed, fmt="pchum", maxlen=None, debug=False):
                     # instead?
                     subround += 1
                     if debug:
-                        print "[Splitting round {}-{}...]".format(
+                        logger.debug("[Splitting round {}-{}...]".format(
                                 rounds, subround
-                                )
+                                ) )
                     point = msg.rfind(' ', 0, lenl)
                     if point < 0:
                         # No spaces to break on...ugh. Break at the last space
@@ -448,12 +451,12 @@ def kxsplitMsg(lexed, fmt="pchum", maxlen=None, debug=False):
                     # Remove what we just added.
                     msg = msg[point:]
                     if debug:
-                        print "msg = {!r}".format(msg)
+                        logger.debug("msg = {!r}".format(msg))
                 else:
                     # Catch the remainder.
                     stack.append(msg)
                     if debug:
-                        print "msg caught; stack = {!r}".format(stack)
+                        logger.debug("msg caught; stack = {!r}".format(stack))
                 # Done processing. Pluck out the first portion so we can
                 # continue processing, clean it up a bit, then add the rest to
                 # our waiting list.
@@ -494,16 +497,17 @@ def kxsplitMsg(lexed, fmt="pchum", maxlen=None, debug=False):
             cte = lexercon.CTagEnd("</c>", fmt, None)
             working.extend([cte] * len(open_ctags))
             if debug:
-                print "\tRound {0} linebreak: Added {1} closing ctags".format(
+                logger.debug(
+                    "\tRound {0} linebreak: Added {1} closing ctags".format(
                         rounds, len(open_ctags)
-                        )
+                        ) )
 
             # Run it through the lexer again to render it.
             working = u''.join(kxpclexer.list_convert(working))
             if debug:
-                print "\tRound {0} add: len == {1} (of {2})".format(
+                logger.debug("\tRound {0} add: len == {1} (of {2})".format(
                         rounds, len(working), maxlen
-                        )
+                        ) )
             # Now that it's done the work for us, append and resume.
             output.append(working)
 
@@ -518,7 +522,7 @@ def kxsplitMsg(lexed, fmt="pchum", maxlen=None, debug=False):
                 # We have more to go.
                 # Reset working, starting it with the unclosed ctags.
                 if debug:
-                    print "\tRound {0}: More to lex".format(rounds)
+                    logger.debug("\tRound {0}: More to lex".format(rounds))
                 working = open_ctags[:]
                 # Calculate the length of the starting tags, add it before
                 # anything else.
@@ -533,7 +537,7 @@ def kxsplitMsg(lexed, fmt="pchum", maxlen=None, debug=False):
                 if debug or True:
                     # This probably shouldn't happen, and if it does, I want to
                     # know if it *works* properly.
-                    print "\tRound {0}: No more to lex".format(rounds)
+                    logger.debug("\tRound {0}: No more to lex".format(rounds))
                 # Clean up, just in case.
                 working = []
                 open_ctags = []
@@ -582,7 +586,7 @@ def kxsplitMsg(lexed, fmt="pchum", maxlen=None, debug=False):
         working = kxpclexer.list_convert(working)
         if len(working) > 0:
             if debug:
-                print "Adding end trails: {!r}".format(working)
+                logger.debug("Adding end trails: {!r}".format(working))
             working = u''.join(working)
             output.append(working)
 
@@ -776,9 +780,9 @@ def kxhandleInput(ctx, text=None, flavor=None):
     try:
         # Turns out that Windows consoles can't handle unicode, heh...who'da
         # thunk. We have to repr() this, as such.
-        print repr(msg)
+        logger.info("RAWMSG: " + repr(msg))
     except Exception as err:
-        print "(Couldn't print processed message: {!s})".format(err)
+        logger.debug("(Couldn't print processed message: {!s})".format(err))
 
     # karxi: We have a list...but I'm not sure if we ever get anything else, so
     # best to play it safe. I may remove this during later refactoring.
@@ -797,9 +801,9 @@ def kxhandleInput(ctx, text=None, flavor=None):
 
     # Debug output.
     try:
-        print repr(msg)
+        logger.info("LEXMSG: " + repr(msg))
     except Exception as err:
-        print "(Couldn't print lexed message: {!s})".format(err)
+        logger.debug("(Couldn't print lexed message: {!s})".format(err))
 
     # Remove coloring if this is a /me!
     if is_action:
