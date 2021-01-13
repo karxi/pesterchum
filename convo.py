@@ -496,7 +496,7 @@ class PesterText(QtGui.QTextEdit):
         if event.button() == QtCore.Qt.LeftButton:
             url = self.anchorAt(event.pos())
             if url != "":
-                if url[0] == "#" and url != "#pesterchum":
+                if url[0] == "#" and url != "#iv.poll":
                     self.parent().mainwindow.showMemos(url[1:])
                 elif url[0] == "@":
                     handle = unicode(url[1:])

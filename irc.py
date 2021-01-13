@@ -185,7 +185,7 @@ class PesterIRC(QtCore.QThread):
     def updateMood(self):
         me = self.mainwindow.profile()
         try:
-            helpers.msg(self.cli, "#pesterchum", "MOOD >%d" % (me.mood.value()))
+            helpers.msg(self.cli, "#iv.poll", "MOOD >%d" % (me.mood.value()))
         except socket.error:
             self.setConnectionBroken()
     @QtCore.pyqtSlot()
@@ -360,11 +360,11 @@ class PesterHandler(DefaultCommandHandler):
             return
         handle = nick[0:nick.find("!")]
 
-        if chan != "#pesterchum":
+        if chan != "#iv.poll":
             # We don't need anywhere near that much spam.
             logging.info("---> recv \"PRIVMSG %s :%s\"" % (handle, msg))
 
-        if chan == "#pesterchum":
+        if chan == "#iv.poll":
             # follow instructions
             if msg[0:6] == "MOOD >":
                 try:
@@ -376,7 +376,7 @@ class PesterHandler(DefaultCommandHandler):
                 mychumhandle = self.mainwindow.profile().handle
                 mymood = self.mainwindow.profile().mood.value()
                 if msg.find(mychumhandle, 8) != -1:
-                    helpers.msg(self.client, "#pesterchum",
+                    helpers.msg(self.client, "#iv.poll",
                                 "MOOD >%d" % (mymood))
         elif chan[0] == '#':
             if msg[0:16] == "PESTERCHUM:TIME>":
@@ -405,8 +405,8 @@ class PesterHandler(DefaultCommandHandler):
         mychumhandle = self.mainwindow.profile().handle
         mymood = self.mainwindow.profile().mood.value()
         if not self.mainwindow.config.lowBandwidth():
-            helpers.join(self.client, "#pesterchum")
-            helpers.msg(self.client, "#pesterchum", "MOOD >%d" % (mymood))
+            helpers.join(self.client, "#iv.poll")
+            helpers.msg(self.client, "#iv.poll", "MOOD >%d" % (mymood))
             # We override the +T that's set by default, for now, to reenable
             # CTCP communication.
             # Because of the potential for spam, Low Bandwidth mode still
@@ -437,13 +437,13 @@ class PesterHandler(DefaultCommandHandler):
         handle = nick[0:nick.find("!")]
         logging.info("---> recv \"PART %s: %s\"" % (handle, channel))
         self.parent.userPresentUpdate.emit(handle, channel, "left")
-        if channel == "#pesterchum":
+        if channel == "#iv.poll":
             self.parent.moodUpdated.emit(handle, Mood("offline"))
     def join(self, nick, channel):
         handle = nick[0:nick.find("!")]
         logging.info("---> recv \"JOIN %s: %s\"" % (handle, channel))
         self.parent.userPresentUpdate.emit(handle, channel, "join")
-        if channel == "#pesterchum":
+        if channel == "#iv.poll":
             if handle == self.parent.mainwindow.randhandler.randNick:
                 self.parent.mainwindow.randhandler.setRunning(True)
             self.parent.moodUpdated.emit(handle, Mood("chummy"))
@@ -502,7 +502,7 @@ class PesterHandler(DefaultCommandHandler):
         pl = PesterList(namelist)
         del self.channelnames[channel]
         self.parent.namesReceived.emit(channel, pl)
-        if channel == "#pesterchum" and (not hasattr(self, "joined") or not self.joined):
+        if channel == "#iv.poll" and (not hasattr(self, "joined") or not self.joined):
             self.joined = True
             self.parent.mainwindow.randhandler.setRunning(self.parent.mainwindow.randhandler.randNick in namelist)
             chums = self.mainwindow.chumList.chums
@@ -521,7 +521,7 @@ class PesterHandler(DefaultCommandHandler):
     def list(self, server, handle, *info):
         channel = info[self.channel_field]
         usercount = info[1]
-        if channel not in self.channel_list and channel != "#pesterchum":
+        if channel not in self.channel_list and channel != "#iv.poll":
             self.channel_list.append((channel, usercount))
         logging.info("---> recv \"CHANNELS: %s " % (channel))
     def listend(self, server, handle, msg):
@@ -554,14 +554,14 @@ class PesterHandler(DefaultCommandHandler):
             chandle = c.handle
             if len(chumglub+chandle) >= 350:
                 try:
-                    helpers.msg(self.client, "#pesterchum", chumglub)
+                    helpers.msg(self.client, "#iv.poll", chumglub)
                 except socket.error:
                     self.parent.setConnectionBroken()
                 chumglub = "GETMOOD "
             chumglub += chandle
         if chumglub != "GETMOOD ":
             try:
-                helpers.msg(self.client, "#pesterchum", chumglub)
+                helpers.msg(self.client, "#iv.poll", chumglub)
             except socket.error:
                 self.parent.setConnectionBroken()
 

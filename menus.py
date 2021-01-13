@@ -1592,7 +1592,7 @@ class PesterUserlist(QtGui.QDialog):
         self.searchbox.setFocus()
     @QtCore.pyqtSlot()
     def updateUsers(self):
-        names = self.mainwindow.namesdb["#pesterchum"]
+        names = self.mainwindow.namesdb["#iv.poll"]
         self.userarea.clear()
         for n in names:
             if str(self.searchbox.text()) == "" or n.lower().find(str(self.searchbox.text()).lower()) != -1:
@@ -1606,9 +1606,9 @@ class PesterUserlist(QtGui.QDialog):
         c = unicode(channel)
         if update == "quit":
             self.delUser(h)
-        elif update == "left" and c == "#pesterchum":
+        elif update == "left" and c == "#iv.poll":
             self.delUser(h)
-        elif update == "join" and c == "#pesterchum":
+        elif update == "join" and c == "#iv.poll":
             if str(self.searchbox.text()) == "" or h.lower().find(str(self.searchbox.text()).lower()) != -1:
                 self.addUser(h)
     def addUser(self, name):

@@ -288,7 +288,7 @@ class PesterLogText(PesterText):
     def mousePressEvent(self, event):
         url = self.anchorAt(event.pos())
         if url != "":
-            if url[0] == "#" and url != "#pesterchum":
+            if url[0] == "#" and url != "#iv.poll":
                 self.parent().parent.showMemos(url[1:])
             elif url[0] == "@":
                 handle = unicode(url[1:])

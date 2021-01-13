@@ -136,6 +136,10 @@ BOTNAMES.extend(CUSTOMBOTS)
 _CONSOLE_ENV = AttrDict()
 _CONSOLE_ENV.PAPP = None
 
+# Basically, the channel(s) taking the role that "#pesterchum" had.
+# Lowercase is expected; the first indice is the default.
+SYS_CHANS = ["#iv.poll"]
+
 
 class waitingMessageHolder(object):
     def __init__(self, mainwindow, **msgfuncs):
@@ -1031,7 +1035,7 @@ class PesterWindow(MovingWindow):
         # to set it that shouldn't cause issues with globals; I honestly don't
         # know what to do.
         # Putting logging statements in here *gives me an object*, but I can't
-        # carry it out of the function. I'll hvae to think of a way around
+        # carry it out of the function. I'll have to think of a way around
         # this....
         # If I use a definition made in here without having another elsewhere,
         # it comes back as undefined. Just...what?
@@ -1060,6 +1064,9 @@ class PesterWindow(MovingWindow):
         if "honk" in options:
               self.honk = options["honk"]
         else: self.honk = True
+        # karxi: Allow old functionality.
+        # If this is set, use Pesterchum's old (awful) protocol.
+        self.legacy = "legacy" in options
 
         self.setAutoFillBackground(True)
         self.setObjectName("main")
@@ -1617,7 +1624,7 @@ class PesterWindow(MovingWindow):
         logging.warning("Console closed.")
 
     def newMemo(self, channel, timestr, secret=False, invite=False):
-        if channel == "#pesterchum":
+        if channel == "#iv.poll":
             return
         if self.memos.has_key(channel):
             self.memos[channel].showChat()
@@ -2292,10 +2299,22 @@ class PesterWindow(MovingWindow):
                 self.chatlog.log(handle, msg)
                 self.sendMessage.emit("PESTERCHUM:IDLE", handle)
 
-    # Presented here so it can be called by other scripts.
+    # Presented here so they can be called by other scripts.
     @staticmethod
     def isBot(handle):
         return handle.upper() in BOTNAMES
+    @staticmethod
+    def isSystemChannel(channel):
+        return channel.lower() in SYS_CHANS
+    @staticmethod
+    def getSystemChannel(ind=None):
+        if ind is None:
+            return SYS_CHANS[0]
+        # An indice was specified, so just get that one.
+        if ind > -1:
+            return SYS_CHANS[ind]
+        # -1 (or other negatives) will just give the whole list.
+        return list(SYS_CHANS)
 
     @QtCore.pyqtSlot()
     def importExternalConfig(self):
@@ -2402,7 +2421,7 @@ class PesterWindow(MovingWindow):
                          self, QtCore.SLOT('userListAdd(QString)'))
             self.connect(self.allusers, QtCore.SIGNAL('pesterChum(QString)'),
                          self, QtCore.SLOT('userListPester(QString)'))
-            self.requestNames.emit("#pesterchum")
+            self.requestNames.emit("#iv.poll")
             self.allusers.show()
 
     @QtCore.pyqtSlot(QtCore.QString)
@@ -2749,9 +2768,9 @@ class PesterWindow(MovingWindow):
             if bandwidthsetting != curbandwidth:
                 self.config.set('lowBandwidth', bandwidthsetting)
                 if bandwidthsetting:
-                    self.leftChannel.emit("#pesterchum")
+                    self.leftChannel.emit("#iv.poll")
                 else:
-                    self.joinChannel.emit("#pesterchum")
+                    self.joinChannel.emit("#iv.poll")
             # nickserv
             autoidentify = self.optionmenu.autonickserv.isChecked()
             nickservpass = self.optionmenu.nickservpass.text()
@@ -3365,7 +3384,9 @@ Click this message to never see this again.")
     def oppts(self, argv):
         options = {}
         try:
-            opts, args = getopt.getopt(argv, "s:p:", ["server=", "port=", "advanced", "no-honk"])
+            opts, args = getopt.getopt(argv, "s:p:",
+                                       ["server=", "port=", "advanced",
+                                        "no-honk", "legacy"])
         except getopt.GetoptError:
             return options
         for opt, arg in opts:
@@ -3377,6 +3398,8 @@ Click this message to never see this again.")
                 options["advanced"] = True
             elif opt in ("--no-honk"):
                 options["honk"] = False
+            elif opt in ("--legacy"):
+                options["legacy"] = True
         return options
 
     def run(self):

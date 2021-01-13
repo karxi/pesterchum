@@ -361,7 +361,10 @@ class userConfig(object):
         try:
             return self.parent.serverOverride
         except AttributeError:
-            return self.get("server", "irc.mindfang.org")
+            #~return self.get("server", "irc.mindfang.org")
+            # TODO: Change this, it's ugly. Apparently Pesterchum doesn't obey
+            # the usual means of overriding, though.
+            return self.get("server", "irc.sorcery.net")
     def port(self):
         try:
             return self.parent.portOverride
@@ -682,8 +685,8 @@ class configWrapper(userConfig):
 
 
 
-# What the fuck is this??? This whole class and everything that *uses* it needs
-# to be rewritten! It's terrible!
+# karxi: What the fuck is this??? This whole class and everything that *uses* it
+# needs to be rewritten! It's terrible!
 class userProfile(object):
     def __init__(self, user):
         self.profiledir = osp.join(_datadir, "profiles")
