@@ -31,7 +31,10 @@ class PesterIRC(QtCore.QThread):
     def IRCConnect(self):
         server = self.config.server()
         port = self.config.port()
-        self.cli = IRCClient(PesterHandler, host=server, port=int(port), nick=self.mainwindow.profile().handle, real_name='pcc31', blocking=True, timeout=120)
+        # karxi: 'pcc31' is the old default, now deprecated. (We're switching
+        # for a reason!!)
+        # I'd like to change this to 'pcc34' when more progress has been made.
+        self.cli = IRCClient(PesterHandler, host=server, port=int(port), nick=self.mainwindow.profile().handle, real_name='pcc32', blocking=True, timeout=120)
         self.cli.command_handler.parent = self
         self.cli.command_handler.mainwindow = self.mainwindow
         self.cli.connect()
