@@ -1409,7 +1409,9 @@ class PesterWindow(MovingWindow):
     def newMessage(self, handle, msg):
         if handle in self.config.getBlocklist():
             #yeah suck on this
-            self.sendMessage.emit("PESTERCHUM:BLOCKED", handle)
+            # karxi: We ignore this. IRC usually does.
+            # TODO: Again, send this if the other person is a Pesterchum user.
+            #~self.sendMessage.emit("PESTERCHUM:BLOCKED", handle)
             return
         # notify
         if self.config.notifyOptions() & self.config.NEWMSG:
@@ -1425,14 +1427,18 @@ class PesterWindow(MovingWindow):
                     if msg == "PESTERCHUM:CEASE":
                         t = self.tm.Toast("Closed Conversation", handle)
                         t.show()
-                    elif msg == "PESTERCHUM:BLOCK":
-                        t = self.tm.Toast("Blocked", handle)
-                        t.show()
-                    elif msg == "PESTERCHUM:UNBLOCK":
-                        t = self.tm.Toast("Unblocked", handle)
-                        t.show()
+                    # karxi: Block messages are disabled.
+                    #~elif msg == "PESTERCHUM:BLOCK":
+                    #~    t = self.tm.Toast("Blocked", handle)
+                    #~    t.show()
+                    #~elif msg == "PESTERCHUM:UNBLOCK":
+                    #~    t = self.tm.Toast("Unblocked", handle)
+                    #~    t.show()
         if not self.convos.has_key(handle):
-            if msg == "PESTERCHUM:CEASE": # ignore cease after we hang up
+            # No conversation currently open with this handle.
+            if msg.startswith("PESTERCHUM:CEASE"): # ignore cease after we hang up
+                return
+            elif msg.startswith("PESTERCHUM:IDLE"):
                 return
             matchingChums = [c for c in self.chumList.chums if c.handle == handle]
             if len(matchingChums) > 0:
@@ -1441,14 +1447,18 @@ class PesterWindow(MovingWindow):
                 mood = Mood(0)
             chum = PesterProfile(handle, mood=mood, chumdb=self.chumdb)
             self.newConversation(chum, False)
-            if len(matchingChums) == 0:
-                self.moodRequest.emit(chum)
+            # karxi: Disabled.
+            #~if len(matchingChums) == 0:
+            #~    self.moodRequest.emit(chum)
         convo = self.convos[handle]
         convo.addMessage(msg, False)
         # play sound here
         if self.config.soundOn():
             if self.config.chatSound() or convo.always_beep:
-                if msg in ["PESTERCHUM:CEASE", "PESTERCHUM:BLOCK"]:
+                # karxi: PESTERCHUM:BLOCK is disabled.
+                if msg in ["PESTERCHUM:CEASE",
+                           #~"PESTERCHUM:BLOCK"
+                           ]:
                     self.ceasesound.play()
                 else:
                     self.alarm.play()
@@ -1464,7 +1474,9 @@ class PesterWindow(MovingWindow):
             newtime = timedelta(0)
             time = TimeTracker(newtime)
             memo.times[handle] = time
-        if not (msg.startswith("/me") or msg.startswith("PESTERCHUM:ME")):
+        # karxi: Both of these are disabled.
+        #~if not (msg.startswith("/me") or msg.startswith("PESTERCHUM:ME")):
+        if True:
             msg = addTimeInitial(msg, memo.times[handle].getGrammar())
         if handle == "ChanServ":
             systemColor = QtGui.QColor(self.theme["memos/systemMsgColor"])
@@ -1847,7 +1859,7 @@ class PesterWindow(MovingWindow):
             self.namesound = NoneSound()
             self.ceasesound = NoneSound()
             self.honksound = NoneSound()
-    
+
     def setVolume(self, vol):
         # TODO: Find a way to make this usable.
 
@@ -2280,6 +2292,9 @@ class PesterWindow(MovingWindow):
 
     def _sendIdleMsgs(self):
         # Tell everyone we're in a chat with that we just went idle.
+        # karxi: PESTERCHUM:IDLE is disabled.
+        return
+
         sysColor = QtGui.QColor(self.theme["convo/systemMsgColor"])
         verb = self.theme["convo/text/idle"]
         for (h, convo) in self.convos.iteritems():

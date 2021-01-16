@@ -102,11 +102,6 @@ class PesterTabWindow(QtGui.QFrame):
         else:
             self.tabs.setCurrentIndex(tabi)
 
-    def convoHasFocus(self, convo):
-        if ((self.hasFocus() or self.tabs.hasFocus()) and
-            self.tabs.tabText(self.tabs.currentIndex()) == convo.title()):
-            return True
-
     def isBot(self, *args, **kwargs):
         return self.mainwindow.isBot(*args, **kwargs)
 
@@ -403,6 +398,10 @@ class PesterText(QtGui.QTextEdit):
                 time += "] "
         else:
             time = ""
+        # karxi: A lot of this will have to be removed, modified, or even
+        # redone.
+        # TODO: Use some of the remaining ones here to figure out whether or
+        # not we're talking to an updated Pesterchum version.
         if lexmsg[0] == "PESTERCHUM:BEGIN":
             parent.setChumOpen(True)
             pmsg = chum.pestermsg(me, systemColor, window.theme["convo/text/beganpester"])
@@ -413,22 +412,23 @@ class PesterText(QtGui.QTextEdit):
             pmsg = chum.pestermsg(me, systemColor, window.theme["convo/text/ceasepester"])
             window.chatlog.log(chum.handle, pmsg)
             self.append(convertTags(pmsg))
-        elif lexmsg[0] == "PESTERCHUM:BLOCK":
-            pmsg = chum.pestermsg(me, systemColor, window.theme['convo/text/blocked'])
-            window.chatlog.log(chum.handle, pmsg)
-            self.append(convertTags(pmsg))
-        elif lexmsg[0] == "PESTERCHUM:UNBLOCK":
-            pmsg = chum.pestermsg(me, systemColor, window.theme['convo/text/unblocked'])
-            window.chatlog.log(chum.handle, pmsg)
-            self.append(convertTags(pmsg))
-        elif lexmsg[0] == "PESTERCHUM:BLOCKED":
-            pmsg = chum.pestermsg(me, systemColor, window.theme['convo/text/blockedmsg'])
-            window.chatlog.log(chum.handle, pmsg)
-            self.append(convertTags(pmsg))
-        elif lexmsg[0] == "PESTERCHUM:IDLE":
-            imsg = chum.idlemsg(systemColor, window.theme['convo/text/idle'])
-            window.chatlog.log(chum.handle, imsg)
-            self.append(convertTags(imsg))
+        # karxi: Commented out. Some may be re-added later.
+        #~elif lexmsg[0] == "PESTERCHUM:BLOCK":
+        #~    pmsg = chum.pestermsg(me, systemColor, window.theme['convo/text/blocked'])
+        #~    window.chatlog.log(chum.handle, pmsg)
+        #~    self.append(convertTags(pmsg))
+        #~elif lexmsg[0] == "PESTERCHUM:UNBLOCK":
+        #~    pmsg = chum.pestermsg(me, systemColor, window.theme['convo/text/unblocked'])
+        #~    window.chatlog.log(chum.handle, pmsg)
+        #~    self.append(convertTags(pmsg))
+        #~elif lexmsg[0] == "PESTERCHUM:BLOCKED":
+        #~    pmsg = chum.pestermsg(me, systemColor, window.theme['convo/text/blockedmsg'])
+        #~    window.chatlog.log(chum.handle, pmsg)
+        #~    self.append(convertTags(pmsg))
+        #~elif lexmsg[0] == "PESTERCHUM:IDLE":
+        #~    imsg = chum.idlemsg(systemColor, window.theme['convo/text/idle'])
+        #~    window.chatlog.log(chum.handle, imsg)
+        #~    self.append(convertTags(imsg))
         elif type(lexmsg[0]) is mecmd:
             memsg = chum.memsg(systemColor, lexmsg)
             if chum is me:
@@ -454,16 +454,17 @@ class PesterText(QtGui.QTextEdit):
             if chum is me:
                 window.chatlog.log(parent.chum.handle, lexmsg)
             else:
-                if ((window.idler.auto or window.idler.manual) and parent.chumopen
-                        and not parent.isBot(chum.handle)):
-                    idlethreshhold = 60
-                    if (not hasattr(self, 'lastmsg')) or \
-                            datetime.now() - self.lastmsg > timedelta(0,idlethreshhold):
-                        verb = window.theme["convo/text/idle"]
-                        idlemsg = me.idlemsg(systemColor, verb)
-                        parent.textArea.append(convertTags(idlemsg))
-                        window.chatlog.log(chum.handle, idlemsg)
-                        parent.messageSent.emit("PESTERCHUM:IDLE", parent.title())
+                # karxi: "PESTERCHUM:IDLE" is disabled.
+                #~if ((window.idler.auto or window.idler.manual) and parent.chumopen
+                #~        and not parent.isBot(chum.handle)):
+                #~    idlethreshhold = 60
+                #~    if (not hasattr(self, 'lastmsg')) or \
+                #~            datetime.now() - self.lastmsg > timedelta(0,idlethreshhold):
+                #~        verb = window.theme["convo/text/idle"]
+                #~        idlemsg = me.idlemsg(systemColor, verb)
+                #~        parent.textArea.append(convertTags(idlemsg))
+                #~        window.chatlog.log(chum.handle, idlemsg)
+                #~        parent.messageSent.emit("PESTERCHUM:IDLE", parent.title())
                 self.lastmsg = datetime.now()
                 window.chatlog.log(chum.handle, lexmsg)
     def changeTheme(self, theme):

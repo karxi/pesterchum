@@ -555,6 +555,9 @@ class PesterMemo(PesterConvo):
         return PesterIcon(self.mainwindow.theme["memos/memoicon"])
 
     def sendTimeInfo(self, newChum=False):
+        # karxi: PESTERCHUM:TIME is disabled.
+        return
+
         if newChum:
             self.messageSent.emit("PESTERCHUM:TIME>%s" % (delta2txt(self.time.getTime(), "server")+"i"),
                                   self.title())
@@ -1060,9 +1063,10 @@ class PesterMemo(PesterConvo):
                 self.userlist.takeItem(self.userlist.row(c))
         elif update == "join":
             self.addUser(h)
-            time = self.time.getTime()
-            serverText = "PESTERCHUM:TIME>"+delta2txt(time, "server")
-            self.messageSent.emit(serverText, self.title())
+            # karxi: PESTERCHUM:TIME is disabled.
+            #~time = self.time.getTime()
+            #~serverText = "PESTERCHUM:TIME>"+delta2txt(time, "server")
+            #~self.messageSent.emit(serverText, self.title())
         elif update == "+q":
             for c in chums:
                 c.founder = True
@@ -1262,6 +1266,9 @@ class PesterMemo(PesterConvo):
 
     @QtCore.pyqtSlot()
     def sendtime(self):
+        # karxi: PESTERCHUM:TIME is disabled.
+        return
+
         me = self.mainwindow.profile()
         systemColor = QtGui.QColor(self.mainwindow.theme["memos/systemMsgColor"])
         time = txt2delta(self.timeinput.text())

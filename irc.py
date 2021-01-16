@@ -157,6 +157,9 @@ class PesterIRC(QtCore.QThread):
             self.setConnectionBroken()
     @QtCore.pyqtSlot(QtCore.QString, bool)
     def startConvo(self, handle, initiated):
+        # karxi: These are disabled for now.
+        return
+
         h = unicode(handle)
         try:
             if initiated:
@@ -166,6 +169,9 @@ class PesterIRC(QtCore.QThread):
             self.setConnectionBroken()
     @QtCore.pyqtSlot(QtCore.QString)
     def endConvo(self, handle):
+        # karxi: This is disabled for now.
+        return
+
         h = unicode(handle)
         try:
             helpers.msg(self.cli, h, "PESTERCHUM:CEASE")
@@ -186,6 +192,9 @@ class PesterIRC(QtCore.QThread):
         self.updateMood()
     @QtCore.pyqtSlot()
     def updateMood(self):
+        # karxi: MOOD is presently disabled.
+        return
+
         me = self.mainwindow.profile()
         try:
             helpers.msg(self.cli, "#iv.poll", "MOOD >%d" % (me.mood.value()))
@@ -193,6 +202,9 @@ class PesterIRC(QtCore.QThread):
             self.setConnectionBroken()
     @QtCore.pyqtSlot()
     def updateColor(self):
+        # karxi: COLOR is disabled.
+        return
+
         me = self.mainwindow.profile()
         for h in self.mainwindow.convos.keys():
             try:
@@ -201,6 +213,9 @@ class PesterIRC(QtCore.QThread):
                 self.setConnectionBroken()
     @QtCore.pyqtSlot(QtCore.QString)
     def blockedChum(self, handle):
+        # karxi: PESTERCHUM:BLOCK is disabled.
+        return
+
         h = unicode(handle)
         try:
             helpers.msg(self.cli, h, "PESTERCHUM:BLOCK")
@@ -208,6 +223,9 @@ class PesterIRC(QtCore.QThread):
             self.setConnectionBroken()
     @QtCore.pyqtSlot(QtCore.QString)
     def unblockedChum(self, handle):
+        # karxi: PESTERCHUM:UNBLOCK is disabled.
+        return
+
         h = unicode(handle)
         try:
             helpers.msg(self.cli, h, "PESTERCHUM:UNBLOCK")
@@ -368,22 +386,26 @@ class PesterHandler(DefaultCommandHandler):
             logging.info("---> recv \"PRIVMSG %s :%s\"" % (handle, msg))
 
         if chan == "#iv.poll":
-            # follow instructions
-            if msg[0:6] == "MOOD >":
-                try:
-                    mood = Mood(int(msg[6:]))
-                except ValueError:
-                    mood = Mood(0)
-                self.parent.moodUpdated.emit(handle, mood)
-            elif msg[0:7] == "GETMOOD":
-                mychumhandle = self.mainwindow.profile().handle
-                mymood = self.mainwindow.profile().mood.value()
-                if msg.find(mychumhandle, 8) != -1:
-                    helpers.msg(self.client, "#iv.poll",
-                                "MOOD >%d" % (mymood))
+            # karxi: MOOD and GETMOOD are disabled; rework this later.
+            pass
+            #~# follow instructions
+            #~if msg[0:6] == "MOOD >":
+            #~    try:
+            #~        mood = Mood(int(msg[6:]))
+            #~    except ValueError:
+            #~        mood = Mood(0)
+            #~    self.parent.moodUpdated.emit(handle, mood)
+            #~elif msg[0:7] == "GETMOOD":
+            #~    mychumhandle = self.mainwindow.profile().handle
+            #~    mymood = self.mainwindow.profile().mood.value()
+            #~    if msg.find(mychumhandle, 8) != -1:
+            #~        helpers.msg(self.client, "#iv.poll",
+            #~                    "MOOD >%d" % (mymood))
         elif chan[0] == '#':
             if msg[0:16] == "PESTERCHUM:TIME>":
-                self.parent.timeCommand.emit(chan, handle, msg[16:])
+                # karxi: PESTERCHUM:TIME is disabled.
+                #~self.parent.timeCommand.emit(chan, handle, msg[16:])
+                pass
             else:
                 self.parent.memoReceived.emit(chan, handle, msg)
         else:
@@ -391,7 +413,8 @@ class PesterHandler(DefaultCommandHandler):
             # silently ignore messages to yourself.
             if handle == self.mainwindow.profile().handle:
                 return
-            if msg[0:7] == "COLOR >":
+            # karxi: This form of color declaration is presently disabled.
+            if False and msg[0:7] == "COLOR >":
                 colors = msg[7:].split(",")
                 try:
                     colors = [int(d) for d in colors]
@@ -409,7 +432,8 @@ class PesterHandler(DefaultCommandHandler):
         mymood = self.mainwindow.profile().mood.value()
         if not self.mainwindow.config.lowBandwidth():
             helpers.join(self.client, "#iv.poll")
-            helpers.msg(self.client, "#iv.poll", "MOOD >%d" % (mymood))
+            # karxi: MOOD is presently disabled.
+            #~helpers.msg(self.client, "#iv.poll", "MOOD >%d" % (mymood))
             # We override the +T that's set by default, for now, to reenable
             # CTCP communication.
             # Because of the potential for spam, Low Bandwidth mode still
@@ -552,6 +576,9 @@ class PesterHandler(DefaultCommandHandler):
         self.client.send('PONG', server)
 
     def getMood(self, *chums):
+        # karxi: GETMOOD is presently disabled.
+        return
+
         chumglub = "GETMOOD "
         for c in chums:
             chandle = c.handle
